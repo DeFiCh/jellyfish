@@ -134,3 +134,26 @@ interface TokenInfo {
   collateralAddress: string
 }
 ```
+
+## getCustomTx
+
+Get detailed information about a DeFiChain custom transaction.
+Will search wallet transactions and mempool transaction if a blockhash is provided
+and that block is available then details for that transaction can be returned.
+-txindex can be enabled to return details for any transaction.
+
+```ts title="client.token.getCustomTx()"
+interface token {
+  getCustomTx (txid: string): Promise<CustomTxInfo>
+}
+
+interface CustomTxInfo {
+  type: string
+  valid: boolean
+  results: any
+  blockhash: string
+  blockHeight: number
+  blockTime: number
+  confirmations: number
+}
+```
