@@ -1,3 +1,4 @@
+import { SmartBuffer } from 'smart-buffer'
 import { WalletHdNode, WalletHdNodeProvider } from '@defichain/jellyfish-wallet'
 import { DERSignature } from '@defichain/jellyfish-crypto'
 import {
@@ -5,7 +6,7 @@ import {
   Vout,
   TransactionSegWit,
   TransactionSigner,
-  SignInputOption, SIGHASH
+  SignInputOption, SIGHASH, CTransaction
 } from '@defichain/jellyfish-transaction'
 import * as bip32 from 'bip32'
 import * as bip39 from 'bip39'
@@ -77,12 +78,14 @@ export function mnemonicToSeed (mnemonic: string[]): Buffer {
  * - BIP44 Multi-Account Hierarchy for Deterministic Wallets
  */
 export class MnemonicHdNode implements WalletHdNode {
-  private readonly root: bip32.BIP32Interface
-  private readonly path: string
-
-  constructor (root: bip32.BIP32Interface, path: string) {
+  constructor (
+    private readonly root: bip32.BIP32Interface,
+    private readonly path: string,
+    private readonly signingCb?: SigningInterface
+  ) {
     this.root = root
     this.path = path
+    this.signingCb = signingCb
   }
 
   /**
@@ -124,9 +127,24 @@ export class MnemonicHdNode implements WalletHdNode {
     const inputs: SignInputOption[] = prevouts.map(prevout => {
       return { prevout: prevout, ellipticPair: this }
     })
-    return TransactionSigner.sign(transaction, inputs, {
+
+    if (this.signingCb !== undefined) {
+      const unsignedBuffer = new SmartBuffer()
+      new CTransaction(transaction).toBuffer(unsignedBuffer)
+      await this.signingCb.beforeSign(unsignedBuffer.toBuffer(), transaction)
+    }
+
+    const signed = await TransactionSigner.sign(transaction, inputs, {
       sigHashType: SIGHASH.ALL
     })
+
+    if (this.signingCb !== undefined) {
+      const signedBuffer = new SmartBuffer()
+      new CTransaction(signed).toBuffer(signedBuffer)
+      await this.signingCb.afterSign(signedBuffer.toBuffer(), signed)
+    }
+
+    return signed
   }
 
   /**
@@ -151,6 +169,11 @@ export class MnemonicHdNode implements WalletHdNode {
   }
 }
 
+export interface SigningInterface {
+  beforeSign: (buffer: Buffer, tx: Transaction) => Promise<void>
+  afterSign: (buffer: Buffer, tx: TransactionSegWit) => Promise<void>
+}
+
 /**
  * Provider that derive MnemonicHdNode from root. Uses a lite on demand derivation.
  */
@@ -159,18 +182,20 @@ export class MnemonicHdNodeProvider implements WalletHdNodeProvider<MnemonicHdNo
    * @param {Buffer} seed of the hd node
    * @param {Bip32Options} options for chain agnostic generation of public/private keys
    */
-  static fromSeed (seed: Buffer, options: Bip32Options): MnemonicHdNodeProvider {
+  static fromSeed (seed: Buffer, options: Bip32Options, signingCb?: SigningInterface): MnemonicHdNodeProvider {
     const node = bip32.fromSeed(seed, options)
-    return new MnemonicHdNodeProvider(node)
+    return new MnemonicHdNodeProvider(node, signingCb)
   }
 
-  private readonly root: bip32.BIP32Interface
-
-  private constructor (root: bip32.BIP32Interface) {
+  private constructor (
+    private readonly root: bip32.BIP32Interface,
+    private readonly signingCb?: SigningInterface
+  ) {
     this.root = root
+    this.signingCb = signingCb
   }
 
   derive (path: string): MnemonicHdNode {
-    return new MnemonicHdNode(this.root, path)
+    return new MnemonicHdNode(this.root, path, this.signingCb)
   }
 }
