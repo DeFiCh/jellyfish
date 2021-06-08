@@ -5,54 +5,43 @@ export type AddressType = 'Unknown' | 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2WSH'
 export type Validator = () => boolean
 
 export abstract class Address {
-  network: Network
-  utf8String: string
-  type: AddressType
-  valid: boolean
-  validatorPassed: number
+  readonly network?: Network
+  readonly utf8String: string
+  readonly buffer?: Buffer
+  readonly type: AddressType
+  readonly valid: boolean
 
-  constructor (network: Network, utf8String: string, valid: boolean, type: AddressType) {
+  constructor (network: Network | undefined, utf8String: string, buffer: Buffer | undefined, valid: boolean, type: AddressType) {
     this.network = network
     this.utf8String = utf8String
     this.valid = valid
     this.type = type
-    this.validatorPassed = 0
+    this.buffer = buffer
+
+    if (valid && (
+      this.network === undefined ||
+      this.buffer === undefined
+    )) {
+      throw new Error('InvalidDefiAddress')
+    }
   }
 
-  abstract validators (): Validator[]
+  /**
+   * should throw if called with address.valid === false
+   */
   abstract getScript (): Script
 
-  validate (): boolean {
-    this.valid = true
-    this.validatorPassed = 0
-    this.validators().forEach((validator, index) => {
-      const passed = validator()
-      this.valid = this.valid && passed
-      if (passed) {
-        this.validatorPassed += 1
-      }
-    })
-    return this.valid
-  }
-}
-
-/**
- * Default Address implementation when parsed address do not matched any type
- */
-export class UnknownTypeAddress extends Address {
-  constructor (network: Network, raw: string) {
-    super(network, raw, false, 'Unknown')
+  getNetwork (): Network {
+    if (!this.valid) {
+      throw new Error('InvalidDefiAddress')
+    }
+    return this.network as Network
   }
 
-  validators (): Validator[] {
-    return []
-  }
-
-  validate (): boolean {
-    return false
-  }
-
-  getScript (): Script {
-    throw new Error('InvalidDeFiAddress')
+  getBuffer (): Buffer {
+    if (!this.valid) {
+      throw new Error('InvalidDefiAddress')
+    }
+    return this.buffer as Buffer
   }
 }

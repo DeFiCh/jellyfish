@@ -1,71 +1,68 @@
 import { bech32 } from 'bech32'
-import { getNetwork, Network, NetworkName } from '@defichain/jellyfish-network'
+import { getNetwork, MainNet, Network, NetworkName, RegTest, TestNet } from '@defichain/jellyfish-network'
 import { Script, OP_CODES, OP_PUSHDATA } from '@defichain/jellyfish-transaction'
+import { Address } from './address'
 
-import { Bech32Address } from './bech32_address'
-import { Validator } from './address'
+export class P2WPKH extends Address {
+  static PUB_KEY_HASH_LENGTH = 20 // count in bytes
 
-export class P2WPKH extends Bech32Address {
-  static SAMPLE = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'
-  static LENGTH_EXCLUDE_HRP = 39 // exclude hrp and separator
+  constructor (network: Network | undefined, utf8String: string, pubKeyHash: Buffer | undefined, valid: boolean = false) {
+    super(network, utf8String, pubKeyHash, valid, 'P2WPKH')
 
-  // 20 bytes, data only, 40 char
-  pubKeyHash: string
-  static PUB_KEY_HASH_LENGTH = 40
-
-  constructor (network: Network, utf8String: string, pubKeyHash: string, validated: boolean = false) {
-    super(network, utf8String, validated, 'P2WPKH')
-    this.pubKeyHash = pubKeyHash
-  }
-
-  validators (): Validator[] {
-    const rawAdd = this.utf8String
-    return [
-      ...super.validators(),
-      () => (rawAdd.length <= P2WPKH.LENGTH_EXCLUDE_HRP + this.getHrp().length + 1),
-      () => (rawAdd.length === P2WPKH.LENGTH_EXCLUDE_HRP + this.getHrp().length + 1),
-      () => (this.pubKeyHash.length === P2WPKH.PUB_KEY_HASH_LENGTH)
-    ]
-  }
-
-  getHrp (): string {
-    return this.network.bech32.hrp
+    // safety precaution
+    if (valid && pubKeyHash?.length !== P2WPKH.PUB_KEY_HASH_LENGTH) {
+      throw new Error('InvalidDefiAddress')
+    }
   }
 
   getScript (): Script {
-    if (!this.valid) {
-      this.validate()
-    }
-
-    if (!this.valid) {
-      throw new Error('InvalidDefiAddress')
-    }
-
     return {
       stack: [
         OP_CODES.OP_0,
-        new OP_PUSHDATA(Buffer.from(this.pubKeyHash, 'hex'), 'little')
+        new OP_PUSHDATA(this.getBuffer(), 'little')
       ]
     }
   }
 
   /**
-   * @param net network
-   * @param hex data, public key hash (20 bytes, 40 characters)
-   * @param witnessVersion default 0
-   * @returns
+   * @param {NetworkName|Network} net mainnet | testnet | regtest
+   * @param {Buffer|string} h160 data, public key hash (20 bytes, 40 characters)
+   * @throws when h160 input string is not 40 characters long (20 bytes)
+   * @returns {P2WPKH}
    */
-  static to (net: Network | NetworkName, h160: string, witnessVersion = 0x00): P2WPKH {
+  static to (net: Network | NetworkName, h160: string | Buffer, witnessVersion = 0x00): P2WPKH {
     const network: Network = typeof net === 'string' ? getNetwork(net) : net
+    const numbers = typeof h160 === 'string' ? Buffer.from(h160, 'hex') : h160
 
-    if (h160.length !== P2WPKH.PUB_KEY_HASH_LENGTH) {
+    if (numbers.length !== P2WPKH.PUB_KEY_HASH_LENGTH) {
       throw new Error('InvalidPubKeyHashLength')
     }
 
-    const numbers = Buffer.from(h160, 'hex')
     const fiveBitsWords = bech32.toWords(numbers)
     const includeVersion = [witnessVersion, ...fiveBitsWords]
     const utf8 = bech32.encode(network.bech32.hrp, includeVersion)
-    return new P2WPKH(network, utf8, h160, true)
+    return new P2WPKH(network, utf8, numbers, true)
+  }
+
+  /**
+   * @param {string} raw jellyfish p2wpkh (bech32 address) string
+   * @returns {P2WPKH}
+   */
+  static from (raw: string): P2WPKH {
+    let network: Network | undefined
+    let data: Buffer | undefined
+    let valid: boolean = false
+    try {
+      const decoded = bech32.decode(raw)
+      const trimmedVersion = decoded.words.slice(1)
+      data = Buffer.from(bech32.fromWords(trimmedVersion))
+
+      network = [MainNet, TestNet, RegTest].find(net => net.bech32.hrp === decoded.prefix)
+      valid = data.length === P2WPKH.PUB_KEY_HASH_LENGTH && network !== undefined
+    } catch (e) {
+      // invalid address, fail to decode bech32
+    }
+
+    return new P2WPKH(network, raw, data, valid)
   }
 }

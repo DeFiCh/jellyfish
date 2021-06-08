@@ -1,8 +1,7 @@
-import bs58 from 'bs58'
 import { MainNet, RegTest, TestNet } from '@defichain/jellyfish-network'
 import { OP_CODES } from '@defichain/jellyfish-transaction'
 import { RegTestContainer } from '@defichain/testcontainers'
-import { DeFiAddress, P2PKH } from '../src'
+import { Address, DeFiAddress, P2PKH } from '../src'
 
 describe('P2PKH', () => {
   const container = new RegTestContainer()
@@ -12,7 +11,8 @@ describe('P2PKH', () => {
     regtest: '',
 
     invalid: 'JBuS81VT8ouPrT6YS55qoS74D13Cw7h1Y', // edited, removed prefix
-    invalidChecksum: '8JBuS81VT8ouPrT6YS55qoS74D13Cw7h1X' // edited checksum (last char)
+    invalidChecksum: '8JBuS81VT8ouPrT6YS55qoS74D13Cw7h1X', // edited checksum (last char)
+    validBtcAddress: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' // valid btc p2pkh
   }
 
   beforeAll(async () => {
@@ -25,7 +25,7 @@ describe('P2PKH', () => {
 
   describe('from() - valid address', () => {
     it('should get the type precisely', () => {
-      const p2pkh = DeFiAddress.from('mainnet', p2pkhFixture.mainnet)
+      const p2pkh = DeFiAddress.from(p2pkhFixture.mainnet)
       expect(p2pkh.valid).toBeTruthy()
       expect(p2pkh.type).toStrictEqual('P2PKH')
       expect(p2pkh.constructor.name).toStrictEqual('P2PKH')
@@ -33,13 +33,13 @@ describe('P2PKH', () => {
     })
 
     it('should work for all recognized network type', () => {
-      const testnet = DeFiAddress.from('testnet', p2pkhFixture.testnet)
+      const testnet = DeFiAddress.from(p2pkhFixture.testnet)
       expect(testnet.valid).toBeTruthy()
       expect(testnet.type).toStrictEqual('P2PKH')
       expect(testnet.constructor.name).toStrictEqual('P2PKH')
       expect(testnet.network).toStrictEqual(TestNet)
 
-      const regtest = DeFiAddress.from('regtest', p2pkhFixture.regtest)
+      const regtest = DeFiAddress.from(p2pkhFixture.regtest)
       expect(regtest.valid).toBeTruthy()
       expect(regtest.type).toStrictEqual('P2PKH')
       expect(regtest.constructor.name).toStrictEqual('P2PKH')
@@ -49,21 +49,18 @@ describe('P2PKH', () => {
 
   describe('from() - invalid address', () => {
     it('should be able to validate in address prefix with network', () => {
-      const invalid = DeFiAddress.from('mainnet', p2pkhFixture.invalid)
+      const invalid = DeFiAddress.from(p2pkhFixture.invalid)
       expect(invalid.valid).toBeFalsy()
     })
 
-    it('should be able to validate in address prefix with network', () => {
-      // valid address, used on different network
-      const p2pkh = DeFiAddress.from('testnet', p2pkhFixture.mainnet)
-      expect(p2pkh.valid).toBeFalsy()
-      // expect(p2pkh.type).toStrictEqual('P2PKH') // invalid address guessed type is not promising, as p2pkh and p2sh are versy similar
-      expect(p2pkh.network).toStrictEqual(TestNet)
+    it('invalid checksum', () => {
+      const invalid = DeFiAddress.from(p2pkhFixture.invalidChecksum)
+      expect(invalid.valid).toBeFalsy()
     })
 
-    it('should get the type precisely', () => {
-      const invalid = DeFiAddress.from('mainnet', p2pkhFixture.invalidChecksum)
-      expect(invalid.valid).toBeFalsy()
+    it('non DFI (network) address should be invalid', () => {
+      const btc = DeFiAddress.from(p2pkhFixture.validBtcAddress)
+      expect(btc.valid).toBeFalsy()
     })
   })
 
@@ -96,18 +93,8 @@ describe('P2PKH', () => {
   })
 
   describe('getScript()', () => {
-    it('should refuse to build ops code stack for invalid address', () => {
-      const invalid = DeFiAddress.from('testnet', p2pkhFixture.mainnet)
-      expect(invalid.valid).toBeFalsy()
-      try {
-        invalid.getScript()
-      } catch (e) {
-        expect(e.message).toStrictEqual('InvalidDefiAddress')
-      }
-    })
-
     it('should be able to build script', async () => {
-      const p2pkh = DeFiAddress.from('mainnet', p2pkhFixture.mainnet)
+      const p2pkh = DeFiAddress.from(p2pkhFixture.mainnet)
       const scriptStack = p2pkh.getScript()
 
       expect(scriptStack.stack.length).toStrictEqual(5)
@@ -119,23 +106,25 @@ describe('P2PKH', () => {
     })
   })
 
-  it('validate()', () => {
-    const hex = bs58.decode(p2pkhFixture.mainnet).toString('hex').substring(2, 42) // take 20 bytes data only
-    const p2pkh = new P2PKH(MainNet, p2pkhFixture.mainnet, hex)
+  describe('constructor()', () => {
+    let validAddress: Address
+    beforeAll(() => {
+      validAddress = DeFiAddress.from(p2pkhFixture.mainnet)
+      expect(validAddress.valid).toBeTruthy()
+    })
 
-    expect(p2pkh.validatorPassed).toStrictEqual(0)
-    expect(p2pkh.valid).toBeFalsy()
+    it('should not be able to instantiate `valid` address - with invalid address length', () => {
+      expect(() => {
+        // eslint-disable-next-line no-new
+        new P2PKH(MainNet, validAddress.utf8String.slice(10), validAddress.buffer, true)
+      }).toThrow('InvalidDefiAddress')
+    })
 
-    const isValid = p2pkh.validate()
-    expect(p2pkh.validatorPassed).toStrictEqual(5)
-    expect(isValid).toBeTruthy()
-  })
-
-  it('guess()', () => {
-    const p2pkh = DeFiAddress.guess(p2pkhFixture.mainnet)
-    expect(p2pkh.valid).toBeTruthy()
-    expect(p2pkh.type).toStrictEqual('P2PKH')
-    expect(p2pkh.constructor.name).toStrictEqual('P2PKH')
-    expect(p2pkh.network).toStrictEqual(MainNet)
+    it('should not be able to instantiate `valid` address - with invalid buffer length', () => {
+      expect(() => {
+        // eslint-disable-next-line no-new
+        new P2PKH(MainNet, validAddress.utf8String, (validAddress.buffer as Buffer).slice(1), true)
+      }).toThrow('InvalidDefiAddress')
+    })
   })
 })

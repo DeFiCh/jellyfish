@@ -1,6 +1,6 @@
 import { MainNet, RegTest, TestNet } from '@defichain/jellyfish-network'
 import { OP_CODES } from '@defichain/jellyfish-transaction'
-import { DeFiAddress, P2WSH } from '../src'
+import { Address, DeFiAddress, P2WSH } from '../src'
 
 describe('P2WSH', () => {
   const p2wshFixture = {
@@ -9,12 +9,13 @@ describe('P2WSH', () => {
     regtest: 'bcrt1qncd7qa2cafwv3cpw68vqczg3qj904k2f4lard4wrj50rzkwmagvssfsq3t',
 
     trimmedPrefix: 'f1qncd7qa2cafwv3cpw68vqczg3qj904k2f4lard4wrj50rzkwmagvsfkkf88', // edited mainnet valid address, broken prefix
-    invalid: 'df1qncd7qa2cafwv3cpw68vqczg3qj904k2f4lard4wrj50rzkwmagvsfkkf8o' // edited mainnet address, letter 'o'
+    invalid: 'df1qncd7qa2cafwv3cpw68vqczg3qj904k2f4lard4wrj50rzkwmagvsfkkf8o', // edited mainnet address, letter 'o'
+    validBtcAddress: 'bc1qncd7qa2cafwv3cpw68vqczg3qj904k2f4lard4wrj50rzkwmagvsfkkf8o'
   }
 
   describe('from() - valid address', () => {
     it('should get the type precisely', () => {
-      const p2sh = DeFiAddress.from('mainnet', p2wshFixture.mainnet)
+      const p2sh = DeFiAddress.from(p2wshFixture.mainnet)
       expect(p2sh.valid).toBeTruthy()
       expect(p2sh.type).toStrictEqual('P2WSH')
       expect(p2sh.constructor.name).toStrictEqual('P2WSH')
@@ -22,13 +23,13 @@ describe('P2WSH', () => {
     })
 
     it('should work for all recognized network type', () => {
-      const testnet = DeFiAddress.from('testnet', p2wshFixture.testnet)
+      const testnet = DeFiAddress.from(p2wshFixture.testnet)
       expect(testnet.valid).toBeTruthy()
       expect(testnet.type).toStrictEqual('P2WSH')
       expect(testnet.constructor.name).toStrictEqual('P2WSH')
       expect(testnet.network).toStrictEqual(TestNet)
 
-      const regtest = DeFiAddress.from('regtest', p2wshFixture.regtest)
+      const regtest = DeFiAddress.from(p2wshFixture.regtest)
       expect(regtest.valid).toBeTruthy()
       expect(regtest.type).toStrictEqual('P2WSH')
       expect(regtest.constructor.name).toStrictEqual('P2WSH')
@@ -38,21 +39,18 @@ describe('P2WSH', () => {
 
   describe('from() - invalid address', () => {
     it('trimmed prefix', () => {
-      const invalid = DeFiAddress.from('mainnet', p2wshFixture.trimmedPrefix)
+      const invalid = DeFiAddress.from(p2wshFixture.trimmedPrefix)
       expect(invalid.valid).toBeFalsy()
     })
 
     it('invalid character set', () => {
-      const invalid = DeFiAddress.from('mainnet', p2wshFixture.invalid)
+      const invalid = DeFiAddress.from(p2wshFixture.invalid)
       expect(invalid.valid).toBeFalsy()
     })
 
-    it('should be able to validate in address prefix with network', () => {
-      // valid address, used on different network
-      const p2sh = DeFiAddress.from('testnet', p2wshFixture.mainnet)
-      expect(p2sh.valid).toBeFalsy()
-      // expect(p2sh.type).toStrictEqual('P2WSH') // invalid address guessed type is not promising, as p2wsh and p2sh are versy similar
-      expect(p2sh.network).toStrictEqual(TestNet)
+    it('non DFI (network) address should be invalid', () => {
+      const btc = DeFiAddress.from(p2wshFixture.validBtcAddress)
+      expect(btc.valid).toBeFalsy()
     })
   })
 
@@ -85,18 +83,8 @@ describe('P2WSH', () => {
   })
 
   describe('getScript()', () => {
-    it('should refuse to build ops code stack for invalid address', () => {
-      const invalid = DeFiAddress.from('testnet', p2wshFixture.mainnet)
-      expect(invalid.valid).toBeFalsy()
-      try {
-        invalid.getScript()
-      } catch (e) {
-        expect(e.message).toStrictEqual('InvalidDefiAddress')
-      }
-    })
-
     it('should be able to build script', async () => {
-      const p2wsh = DeFiAddress.from('mainnet', p2wshFixture.mainnet)
+      const p2wsh = DeFiAddress.from(p2wshFixture.mainnet)
       const scriptStack = p2wsh.getScript()
 
       expect(scriptStack.stack.length).toStrictEqual(2)
@@ -105,23 +93,19 @@ describe('P2WSH', () => {
     })
   })
 
-  it('validate()', () => {
-    const data = '9e1be07558ea5cc8e02ed1d80c0911048afad949affa36d5c3951e3159dbea19' // 32 bytes
+  describe('constructor()', () => {
+    let validAddress: Address
 
-    const p2wsh = new P2WSH(RegTest, p2wshFixture.regtest, data)
-    expect(p2wsh.validatorPassed).toStrictEqual(0)
-    expect(p2wsh.valid).toBeFalsy()
+    beforeAll(() => {
+      validAddress = DeFiAddress.from(p2wshFixture.mainnet)
+      expect(validAddress.valid).toBeTruthy()
+    })
 
-    const isValid = p2wsh.validate()
-    // expect(p2wsh.validatorPassed).toStrictEqual(4) // length, network prefix, data character set
-    expect(isValid).toBeTruthy()
-  })
-
-  it('guess()', () => {
-    const p2wsh = DeFiAddress.guess(p2wshFixture.mainnet)
-    expect(p2wsh.valid).toBeTruthy()
-    expect(p2wsh.type).toStrictEqual('P2WSH')
-    expect(p2wsh.constructor.name).toStrictEqual('P2WSH')
-    expect(p2wsh.network).toStrictEqual(MainNet)
+    it('should not be able to instantiate `valid` address - with invalid buffer length', () => {
+      expect(() => {
+        // eslint-disable-next-line no-new
+        new P2WSH(MainNet, validAddress.utf8String, (validAddress.buffer as Buffer).slice(1), true)
+      }).toThrow('InvalidDefiAddress')
+    })
   })
 })
