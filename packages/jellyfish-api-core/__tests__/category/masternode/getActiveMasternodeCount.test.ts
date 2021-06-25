@@ -16,8 +16,12 @@ describe('Masternode', () => {
   })
 
   it('should getActiveMasternodeCount', async () => {
-    const masternodeCount = await client.masternode.getActiveMasternodeCount()
+    jest.setTimeout(400000)
+    await client.masternode.createMasternode(await client.wallet.getNewAddress())
 
+    await container.generate(2016)
+
+    const masternodeCount = await client.masternode.getActiveMasternodeCount()
     console.log(masternodeCount) // 1
   })
 })
