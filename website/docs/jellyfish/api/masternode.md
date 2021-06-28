@@ -128,3 +128,13 @@ interface MasternodeResult<T> {
   [id: string]: T
 }
 ```
+
+## getActiveMasternodeCount 
+
+Return number of unique masternodes in the last specified number of blocks.
+
+```ts title="client.masternode.getActiveMasternodeCount"
+interface masternode {
+  getActiveMasternodeCount (blockCount: number = 20160): Promise<number>
+}
+```

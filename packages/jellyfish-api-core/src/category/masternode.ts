@@ -105,6 +105,16 @@ export class Masternode {
   async getMasternode (masternodeId: string): Promise<MasternodeResult<MasternodeInfo>> {
     return await this.client.call('getmasternode', [masternodeId], 'number')
   }
+
+  /**
+   * Return number of unique masternodes in the last specified number of blocks.
+   *
+   * @param {number} [blockCount = 20160] The number of blocks to check for unique masternodes.
+   * @return {Promise<number>} Number of unique masternodes seen
+   */
+  async getActiveMasternodeCount (blockCount: number = 20160): Promise<number> {
+    return await this.client.call('getactivemasternodecount', [blockCount], 'number')
+  }
 }
 
 export interface UTXO {
