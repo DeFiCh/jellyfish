@@ -106,6 +106,25 @@ export class PoolPair {
   }
 
   /**
+   *  Creates a pool swap transaction with given metadata
+   *
+   * @param {PoolSwapMetadata} metadata a provided information to create pool swap transaction
+   * @param {string} metadata.from address of the owner of tokenFrom
+   * @param {string} metadata.tokenFrom swap from token {symbol/id}
+   * @param {number} metadata.amountFrom amount from tokenA
+   * @param {to} metadata.to address of the owner of tokenTo
+   * @param {tokenTo} metadata.tokenTo swap to token {symbol/id}
+   * @param {maxPrice} [metadata.maxPrice] acceptable max price
+   *  @param {PoolSwapUTXO[]} [utxos = []] array for utxos to spend from.
+   *  @param {string} [utxos.txid] the transaction id.
+   *  @param {number} [utxos.vout] the output number.
+   *  @return {Promise<string>}  hex of performed transaction
+   */
+  async poolSwap (metadata: PoolSwapMetadata, utxos: PoolSwapUTXO[] = []): Promise<string> {
+    return await this.client.call('poolswap', [metadata, utxos], 'bignumber')
+  }
+
+  /**
    * Create a test pool swap transaction to check pool swap's return result
    *
    * @param {TestPoolSwapMetadata} metadata a provided information to create test pool swap transaction
@@ -212,6 +231,20 @@ export interface AddPoolLiquidityUTXO {
 
 export interface PoolShareOptions {
   isMineOnly?: boolean
+}
+
+export interface PoolSwapMetadata {
+  from: string
+  tokenFrom: string
+  amountFrom: number
+  to: string
+  tokenTo: string
+  maxPrice?: number
+}
+
+export interface PoolSwapUTXO {
+  txid: string
+  vout: number
 }
 
 export interface TestPoolSwapMetadata {

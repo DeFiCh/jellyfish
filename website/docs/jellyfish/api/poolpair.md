@@ -161,6 +161,29 @@ interface PoolShareOptions {
 }
 ```
 
+## poolSwap 
+Creates a poolSwap transaction.
+
+```ts title="client.poolpair.poolSwap()"
+interface poolpair {
+  poolSwap (metadata: PoolSwapMetadata, utxos: PoolSwapUTXO[] = []): Promise<string>
+}
+
+interface PoolSwapMetadata {
+  from: string
+  tokenFrom: string
+  amountFrom: number
+  to: string
+  tokenTo: string
+  maxPrice?: number
+}
+
+interface PoolSwapUTXO {
+  txid: string
+  vout: number
+}
+```
+
 ## testPoolSwap
 
 Create a test pool swap transaction to check pool swap's return result
